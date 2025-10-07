@@ -18,6 +18,7 @@ setwd("/Users/willmatthaeus/Dropbox/TCD Postdoc/didactic_xrf/")
 input_switch <-"Ant"
 # input_switch <- "Sid"
 
+#read in data
 if(input_switch=="Sid"){
 #read in the data
 xrf <- read_excel(path = "Mastersheet.xlsx")
@@ -33,7 +34,6 @@ element_names <- colnames(elements)
 errors<-xrf[seq(3,77,2)]
 error_names <- colnames(errors)
 }
-
 if(input_switch=="Ant"){
   
   #read in the data
@@ -61,7 +61,6 @@ if(input_switch=="Ant"){
 }
 
 ##Boxplots
-
 if(input_switch=="Ant"){
   #adjust the 'shape' of the data from a matrix of elements to a table where 
   #each row is a single element concentration with a other categorical variables
