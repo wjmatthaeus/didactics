@@ -7,37 +7,58 @@
 pkgs <- c("readr", "ggplot2", "dplyr", "readxl",
           "tibble", "tidyr", "stringr",
           "PerformanceAnalytics", "psych",
-          "FactoMineR", "factoextra","rstatix")
+          "FactoMineR", "factoextra","rstatix",
+          "nsprcomp","compositions","FactoInvestigate")
 vapply(pkgs, library, logical(1), character.only = TRUE, logical.return = TRUE)
 
 #change the working directory. update the string "/Users.." to contain the 
 #path to the directory containing this script and your data file
-setwd("/Users/willmatthaeus/Dropbox/TCD Postdoc/didactic_xrf/")
-
+setwd("/Users/willmatthaeus/Dropbox/didactics/didactic_xrf/")
+'%!in%' <- function(x,y)!('%in%'(x,y))
 #only change this here, then the rest of the code should work for *your* data
-input_switch <-"Ant"
+# input_switch <-"Ant"
 # input_switch <- "Sid"
+input_switch <- "Cat"
 
 #read in data
 if(input_switch=="Sid"){
 #read in the data
-xrf <- read_excel(path = "Mastersheet.xlsx")
+xrf <- read_excel(path = "data/Mastersheet.xlsx")
 #find the group ids from the sample name and make a new column
 xrf$group<-NA
 xrf[grep("CSD",xrf$SAMPLE),]$group <- "new"
 xrf[is.na(xrf$group),]$group <- "old"
 xrf$group <- as.factor(xrf$group)
-
-#separate out the data columns and the error columns
+#
 elements<-xrf[seq(2,76,2)]
 element_names <- colnames(elements)
 errors<-xrf[seq(3,77,2)]
 error_names <- colnames(errors)
+
+#grab some more info from the sample names
+xrf<-xrf %>% select(all_of(c("SAMPLE", element_names))) %>%
+              mutate(splitted = str_split_fixed(SAMPLE,"_",n = 2),
+                     site_time = splitted[,1],
+                     time = str_match(splitted[,1],"[A-Z]+"),
+                     site = str_match(splitted[,1],"[0-9]+"),
+                     species = splitted[,2],
+                     )
+
+# %>%
+#               rename(time = "time[, 1]")
+# 
+# 
+# #prototypes
+# xrf$t
+# str_split_fixed(xrf$SAMPLE[2],"_",n = 2)[,2]
+#separate out the data columns and the error columns
+
 }
+
 if(input_switch=="Ant"){
   
   #read in the data
-  xrf <- read_excel(path = "STANAST_XRF_GINK.xlsx")
+  xrf <- read_excel(path = "data/STANAST_XRF_GINK.xlsx")
   #find the group ids from the sample name and make a new column
   which(xrf$SAMPLE=="b4-51258-F")
   xrf[57,]$SAMPLE<-"b4-51258-F_2"
@@ -50,7 +71,6 @@ if(input_switch=="Ant"){
   xrf[is.na(xrf$locality),]$locality <- "South Tankrediakløft"
   xrf$locality <- as.factor(xrf$locality)
   which(is.na(xrf$locality))
-  xrf$locality <- factor(xrf$locality)
   
   xrf$taxon <- factor(xrf$TAXON)
   
@@ -60,7 +80,175 @@ if(input_switch=="Ant"){
   
 }
 
+if(input_switch=="Cat"){
+  #read in the data
+  xrf <- read_excel(path = "data/data/Carboniferous XRF.xlsx",sheet = 2)
+  #find the group ids from the sample name and make a new column
+  standards <- xrf %>% filter(SAMPLE%in%c("sdarm2","sdarm"))
+  xrf<- xrf %>% filter(SAMPLE%!in%c("sdarm2","sdarm"))
+  # xrf %>% select(SAMPLE)%>%unique%>%print(n=126)
+  # xrf <- xrf %>% mutate(name_split = str_split(SAMPLE,'-'))
+  goodnames_xrf <- xrf[grep(x = xrf$SAMPLE,pattern = "_"),]
+  badnames_xrf <- xrf[-grep(x = xrf$SAMPLE,pattern = "_"),]
+  #
+  goodnames_xrf <- goodnames_xrf %>% 
+    mutate(name_split = str_split_fixed(SAMPLE,'-',n=3)) %>%
+    mutate(name = name_split[,3]) %>%
+    mutate(name_split = str_split_fixed(name,'_',n=3))%>%
+    mutate(core= name_split[,1], side = name_split[,2], spot = name_split[,3])%>%
+    select(-name_split, -name)
+  
+  goodnames_xrf$side[which(goodnames_xrf$side == 'front')]<-"FRONT"
+  #
+  goodnames_xrf$substrate <- NA
+  goodnames_xrf$substrate[grep(x = goodnames_xrf$spot, pattern = '[mM]')] <- 'Matrix'
+  goodnames_xrf$substrate[grep(x = goodnames_xrf$spot, pattern = '[fF]')] <- 'Fossil'
+  # which(is.na(goodnames_xrf$spot))
+  # unique(goodnames_xrf$LOCATION)
+  # [1] "womac"              "murphysboro"        "new haven"          "seline,springfield"
+  # [5] "chapel"             "Murphysboro"        "Chapel"   
+  goodnames_xrf<-goodnames_xrf%>%
+  mutate(
+    location = case_when(
+    LOCATION == "seline,springfield" ~ "Seline",
+    LOCATION == "womac"  ~ "Womac",
+    LOCATION == "murphysboro"  ~ "Murphysboro",
+    LOCATION == "new haven"  ~ "New haven",
+    LOCATION == "chapel"  ~ "Chapel",
+    .default = as.character(LOCATION)
+    )
+  )
+            
+  #
+  # unique(goodnames_xrf$core)
+  # unique(goodnames_xrf$side)
+  # unique(goodnames_xrf$spot)
+  # unique(goodnames_xrf$substrate)
+  # unique(goodnames_xrf$location)
+
+  #
+  badnames_xrf <- badnames_xrf %>% 
+    mutate(name_split = str_split_fixed(SAMPLE,'-',n=2)) %>% 
+    mutate(core = name_split[,1], spot=name_split[,2])%>% 
+    select(-name_split)
+  #
+  badnames_xrf$substrate <- NA
+  badnames_xrf$substrate[grep(x = badnames_xrf$spot, pattern = '[mM]')] <- 'Matrix'
+  badnames_xrf$substrate[grep(x = badnames_xrf$spot, pattern = '[fF]')] <- 'Fossil'
+  badnames_xrf$substrate[which(is.na(badnames_xrf$substrate))] <-'Fossil'
+  #
+  badnames_xrf$side<-"FRONT"
+  #
+  # unique(badnames_xrf$LOCATION)
+  # [1] "paum mine" "womac"     "Paum mine"
+  badnames_xrf<-badnames_xrf%>%
+    mutate(
+      location = case_when(
+        LOCATION == "paum mine" ~ "Paum mine",
+        LOCATION == "womac"  ~ "Womac",
+        .default = as.character(LOCATION)
+      )
+    )
+  #
+  # unique(badnames_xrf$spot) 
+  # unique(badnames_xrf$substrate) 
+  # unique(badnames_xrf$core)
+  # unique(badnames_xrf$location)
+  
+  #marge
+  xrf<-rbind(goodnames_xrf, badnames_xrf)
+  
+  # colnames(xrf)
+  # [1] "Reading No" "Time"       "Type"       "Duration"   "Units"      "Sequence"   "Flags"     
+  # [8] "SAMPLE"     "LOCATION"   "INSPECTOR"  "MISC"       "NOTE"       "User Login" "Ba"        
+  # [15] "Ba Error"   "Sb"         "Sb Error"   "Sn"         "Sn Error"   "Cd"         "Cd Error"  
+  # [22] "Pd"         "Pd Error"   "Ag"         "Ag Error"   "Bal"        "Bal Error"  "Mo"        
+  # [29] "Mo Error"   "Nb"         "Nb Error"   "Zr"         "Zr Error"   "Sr"         "Sr Error"  
+  # [36] "Rb"         "Rb Error"   "Bi"         "Bi Error"   "As"         "As Error"   "Se"        
+  # [43] "Se Error"   "Au"         "Au Error"   "Pb"         "Pb Error"   "W"          "W Error"   
+  # [50] "Zn"         "Zn Error"   "Cu"         "Cu Error"   "Ni"         "Ni Error"   "Co"        
+  # [57] "Co Error"   "Fe"         "Fe Error"   "Mn"         "Mn Error"   "Cr"         "Cr Error"  
+  # [64] "V"          "V Error"    "Ti"         "Ti Error"   "Ca"         "Ca Error"   "K"         
+  # [71] "K Error"    "Al"         "Al Error"   "P"          "P Error"    "Si"         "Si Error"  
+  # [78] "Cl"         "Cl Error"   "S"          "S Error"    "Mg"         "Mg Error"   "core"      
+  # [85] "side"       "spot"       "substrate"  "location" 
+  
+  #separate out the data columns and the error columns
+  element.colnums<-seq(14,82,2)
+  elements<-xrf[element.colnums]
+  element_names <- colnames(elements)
+  xrf[cols.num] <- sapply(XRFtest[cols.num],as.numeric)
+}
+
 ##Boxplots
+if(input_switch=="Sid"){
+  
+  
+  #adjust the 'shape' of the data from a matrix of elements to a table where 
+  #each row is a single element concentration with a other categorical variables
+  #like taxon and locality
+  xrf_long <- xrf%>%
+    pivot_longer(cols = all_of(element_names),names_to = c("element"))%>%
+    rename(ppm=value)
+  
+  
+  #if you want to filter rows, keep certain ones or drop others
+  # xrf_long <- filter(locality=="Astartekløft", 
+  #                    taxon!=c("GINKGOITES MINUTA", "GINKGOITES")) 
+  
+  a_big_boxplot <- xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=species, y=ppm, color=time, fill = time))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_grid(element~site, scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Sid_element_boxplots.png"
+  ggsave(plotName, plot = a_big_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  #simplified a bit, focused on locality
+  locality_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=locality, y=ppm, color=locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_locality_boxplots.png"
+  ggsave(plotName, plot = locality_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  #simplified a bit, focused on taxon
+  taxon_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=taxon, y=ppm, color=taxon))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_taxon_boxplots.png"
+  ggsave(plotName, plot = taxon_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  
+  
+}
+
 if(input_switch=="Ant"){
   #adjust the 'shape' of the data from a matrix of elements to a table where 
   #each row is a single element concentration with a other categorical variables
@@ -73,9 +261,9 @@ if(input_switch=="Ant"){
   # xrf_long <- filter(locality=="Astartekløft", 
   #                    taxon!=c("GINKGOITES MINUTA", "GINKGOITES")) 
   
-  a_big_boxplot<-xrf_long %>%  
+  a_big_boxplot <- xrf_long %>%  
     ggplot()+#just to get things started
-    geom_boxplot(aes(x=taxon, y=ppm, color=locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    geom_boxplot(aes(x=taxon, y=ppm, color=element, fill = locality))+#make boxplot shapes, separate in space using taxon, and color using locality
     facet_wrap(element~., scales="free")+#separate element plots out into separate panels
     theme(axis.text.x=element_text(angle=45, hjust = 1))
   
@@ -87,6 +275,107 @@ if(input_switch=="Ant"){
   ggsave(plotName, plot = a_big_boxplot, device = "png", path = ".",
          scale = 1, height = 16, width = 14, units = c("in"),
          dpi = 300, limitsize = TRUE)
+  
+  #simplified a bit, focused on locality
+  locality_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=locality, y=ppm, color=locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_locality_boxplots.png"
+  ggsave(plotName, plot = locality_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  #simplified a bit, focused on taxon
+  taxon_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=taxon, y=ppm, color=taxon))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_taxon_boxplots.png"
+  ggsave(plotName, plot = taxon_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  
+  
+}
+
+if(input_switch=="Cat"){
+  #adjust the 'shape' of the data from a matrix of elements to a table where 
+  #each row is a single element concentration with a other categorical variables
+  #like taxon and locality
+  xrf_long <- xrf%>%
+    pivot_longer(cols = all_of(element_names),names_to = c("element"))%>%
+    rename(ppm=value)
+  
+  #if you want to filter rows, keep certain ones or drop others
+  # xrf_long <- filter(locality=="Astartekløft", 
+  #                    taxon!=c("GINKGOITES MINUTA", "GINKGOITES")) 
+  
+  a_big_boxplot <- xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=taxon, y=ppm, color=element, fill = locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_element_boxplots.png"
+  ggsave(plotName, plot = a_big_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  #simplified a bit, focused on locality
+  locality_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=locality, y=ppm, color=locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_locality_boxplots.png"
+  ggsave(plotName, plot = locality_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  #simplified a bit, focused on taxon
+  taxon_boxplot<-xrf_long %>%  
+    ggplot()+#just to get things started
+    geom_boxplot(aes(x=taxon, y=ppm, color=taxon))+#make boxplot shapes, separate in space using taxon, and color using locality
+    facet_wrap(element~., scales="free")+#separate element plots out into separate panels
+    theme(axis.text.x=element_text(angle=45, hjust = 1))
+  
+  #some plot saving code
+  #useful for making nice plots with high res at a particular size  
+  #i just played with the size til it looked good
+  #it saves into whatever directory you set at the the top
+  plotName<-"Anto_elements_taxon_boxplots.png"
+  ggsave(plotName, plot = taxon_boxplot, device = "png", path = ".",
+         scale = 1, height = 16, width = 14, units = c("in"),
+         dpi = 300, limitsize = TRUE)
+  
+  
+  
   
 }
 
@@ -193,3 +482,25 @@ fviz_pca_ind(res.pca, axes = c(1,3), label="none", habillage = xrf$locality)
 #no separation of old and new
 #but remember, the PCA (1) didn't work very well and (2) is not designed
 #to test for differences between groups
+
+###try nsprcomp for constrained PCA
+nn_pca <- nsprcomp(elements, ncomp = 4, scale.=T, center = F,  nneg = T)
+fviz_pca_var(nn_pca)
+fviz_pca_ind(nn_pca)
+summary(nn_pca)
+
+nn_comp_pca <- nscumcomp(elements, ncomp=4, k=150, scale.= T, nneg=TRUE, gamma=1)
+fviz_pca_var(nn_comp_pca)
+fviz_pca_ind(nn_comp_pca)
+
+###try compositions package
+x <- rcomp(elements)
+compo_pca<-PCA(x) #removes missing values
+
+
+# compo_pca <- princomp(x)
+plot(compo_pca,habillage = xrf$locality)
+
+Investigate(compo_pca)
+
+
