@@ -175,9 +175,10 @@ if(input_switch=="Cat"){
   
   #separate out the data columns and the error columns
   element.colnums<-seq(14,82,2)
+  xrf[element.colnums] <- sapply(xrf[element.colnums],as.numeric)
   elements<-xrf[element.colnums]
   element_names <- colnames(elements)
-  xrf[cols.num] <- sapply(XRFtest[cols.num],as.numeric)
+  
 }
 
 ##Boxplots
@@ -318,17 +319,19 @@ if(input_switch=="Cat"){
   #adjust the 'shape' of the data from a matrix of elements to a table where 
   #each row is a single element concentration with a other categorical variables
   #like taxon and locality
-  xrf_long <- xrf%>%
+  categories<-c( "spot", "substrate", "core", "location")
+  
+  xrf_long <- xrf%>%select(all_of(c(categories,element_names)))%>%
     pivot_longer(cols = all_of(element_names),names_to = c("element"))%>%
-    rename(ppm=value)
+    rename(ppm=value) %>% filter(!is.na(ppm))
   
   #if you want to filter rows, keep certain ones or drop others
-  # xrf_long <- filter(locality=="Astartekløft", 
+  #xrf_long <- filter(locality=="Astartekløft", 
   #                    taxon!=c("GINKGOITES MINUTA", "GINKGOITES")) 
   
   a_big_boxplot <- xrf_long %>%  
     ggplot()+#just to get things started
-    geom_boxplot(aes(x=taxon, y=ppm, color=element, fill = locality))+#make boxplot shapes, separate in space using taxon, and color using locality
+    geom_boxplot(aes(x=location, y=ppm, color=substrate))+#make boxplot shapes, separate in space using taxon, and color using locality
     facet_wrap(element~., scales="free")+#separate element plots out into separate panels
     theme(axis.text.x=element_text(angle=45, hjust = 1))
   
@@ -336,9 +339,9 @@ if(input_switch=="Cat"){
   #useful for making nice plots with high res at a particular size  
   #i just played with the size til it looked good
   #it saves into whatever directory you set at the the top
-  plotName<-"Anto_element_boxplots.png"
+  plotName<-"Cat_element_boxplots.png"
   ggsave(plotName, plot = a_big_boxplot, device = "png", path = ".",
-         scale = 1, height = 16, width = 14, units = c("in"),
+         scale = 1, height = 16, width = 25, units = c("in"),
          dpi = 300, limitsize = TRUE)
   
   #simplified a bit, focused on locality
