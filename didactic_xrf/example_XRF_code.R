@@ -174,7 +174,7 @@ if(input_switch=="Cat"){
   # [85] "side"       "spot"       "substrate"  "location" 
   
   #separate out the data columns and the error columns
-  element.colnums<-seq(14,82,2)
+  element.colnums<-seq(17,85,2)
   xrf[element.colnums] <- sapply(xrf[element.colnums],as.numeric)
   elements<-xrf[element.colnums]
   element_names <- colnames(elements)
@@ -345,7 +345,7 @@ if(input_switch=="Cat"){
          dpi = 300, limitsize = TRUE)
   
   #simplified a bit, focused on locality
-  locality_boxplot<-xrf_long %>%  
+  locality_boxplot <- xrf_long %>%
     ggplot()+#just to get things started
     geom_boxplot(aes(x=locality, y=ppm, color=locality))+#make boxplot shapes, separate in space using taxon, and color using locality
     facet_wrap(element~., scales="free")+#separate element plots out into separate panels
